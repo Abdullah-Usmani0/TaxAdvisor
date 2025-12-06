@@ -14,6 +14,7 @@ An intelligent multi-agent tax consultancy system powered by Google Gemini and L
 ## 🎯 Use Case
 
 This system is designed for tax consultants and advisors who need to:
+
 - Analyze cross-border tax residency scenarios
 - Understand Statutory Residence Test (SRT) implications
 - Review Double Tax Treaty (DTT) provisions
@@ -29,13 +30,15 @@ This system is designed for tax consultants and advisors who need to:
 
 ### Installation
 
-1. **Clone the repository**
+#### 1. Clone the repository
+
 ```bash
 git clone https://github.com/Abdullah-Usmani0/TaxAdvisor.git
 cd TaxAdvisor
 ```
 
-2. **Create a virtual environment**
+#### 2. Create a virtual environment
+
 ```bash
 python -m venv venv
 
@@ -46,23 +49,25 @@ python -m venv venv
 source venv/bin/activate
 ```
 
-3. **Install dependencies**
+#### 3. Install dependencies
+
 ```bash
 pip install langgraph langchain-google-genai langchain-community tavily-python markdown xhtml2pdf python-dotenv
 ```
 
-4. **Set up environment variables**
+#### 4. Set up environment variables
 
 Create a `.env` file in the project root:
-```env
+
+```
 GOOGLE_API_KEY=your_google_api_key_here
 TAVILY_API_KEY=your_tavily_api_key_here
 ```
 
-### Get API Keys
+#### 5. Get API Keys
 
 - **Google Gemini API**: [Get API Key](https://makersuite.google.com/app/apikey)
-- **Tavily API**: [Get API Key](https://tavily.com/)
+- **Tavily API**: [Get API Key](https://tavily.com)
 
 ## 💻 Usage
 
@@ -73,6 +78,7 @@ python agent2.py
 ```
 
 The system will:
+
 1. 🔍 Extract client profile from the transcript
 2. 📋 Plan research strategy
 3. 🔎 Execute deep web searches for tax legislation
@@ -98,6 +104,32 @@ The system will:
    - Target Tax Residency: Saudi Arabia (KSA)
    ...
 ```
+
+## 🔮 Future Roadmap
+
+To evolve this MVP into a fully commercial Tax Consultancy Platform, the following features and capabilities are planned for implementation:
+
+### 1. Intelligence & Accuracy Layers (The "Brain")
+
+- [ ] **Internal Knowledge Base (RAG)**: Integrate a vector database (Pinecone/Chroma) to store and retrieve internal firm precedents, past reports, and trusted tax PDFs. The agent will prioritize this "source of truth" before searching the web.
+- [ ] **Fact-Check Agent ("The Auditor")**: Add a dedicated node that verifies every citation in the generated draft against actual statutes, rejecting vague references.
+- [ ] **Scenario Modeling**: Enhance the planner to generate "A/B Scenarios" (e.g., "Sell vs. Rent") and automatically produce comparison tables in the final report.
+
+### 2. User Interface & Experience
+
+- [ ] **Streaming UI**: Develop a frontend that displays the agent's thought process (e.g., "Searching UK-Saudi Treaty...") in real-time "thought bubbles" to build user trust.
+- [ ] **Human-in-the-Loop (Checkpointing)**: Implement LangGraph "interrupts" to pause the workflow after research. This allows a human consultant to review the research plan, add missing documents, or correct assumptions before the report is written.
+- [ ] **Dynamic Template Builder**: Create a drag-and-drop editor allowing users to map variables (e.g., `{{client_name}}`) to custom PDF templates, removing hardcoded prompt reliance.
+
+### 3. Data Handling & Infrastructure
+
+- [ ] **Dockerization**: Containerize the entire application to ensure system dependencies (like those required for PDF generation) work consistently across Windows, Linux, and Mac.
+- [ ] **PII Redaction Node**: Insert a security layer at the start of the graph to detect and redact sensitive client data (Tax IDs, phone numbers) before sending context to third-party LLMs.
+
+### 4. Advanced Capabilities
+
+- [ ] **Follow-up Q&A Mode**: Enable a chat interface post-report generation, allowing consultants to interrogate the AI about its specific findings (e.g., "Why did you apply the Split Year treatment?").
+- [ ] **Multi-Modal Input (OCR)**: Add an OCR agent capable of reading uploaded documents (P60s, Tax Returns) to automatically populate the Client Profile without manual data entry.
 
 ## 📁 Project Structure
 
@@ -137,7 +169,7 @@ tax laws (e.g., UK, KSA, Italy).")
 
 Customize the Hoxton Tax branding in `generate_pdf_report()`:
 
-- **Primary Color**: `#1A4D2E` (Dark Green)
+- **Primary Color**: #1A4D2E (Dark Green)
 - **Font**: Helvetica/Arial
 - **Page Size**: A4
 - **Margins**: 2.5cm
@@ -148,11 +180,11 @@ Generated reports include:
 
 1. **Executive Summary**: High-level overview of the tax situation
 2. **Premise (Client Situation)**: Detailed client circumstances
-3. **UK Statutory Residence Test (SRT) Analysis**: 
+3. **UK Statutory Residence Test (SRT) Analysis**:
    - Day count scenarios
    - Tie analysis
    - Residency determination
-4. **Double Tax Treaty (DTT) Analysis**: 
+4. **Double Tax Treaty (DTT) Analysis**:
    - Article-by-article review
    - Tie-breaker clauses
    - Tax implications
@@ -168,6 +200,7 @@ python test_pdf_generation.py
 ```
 
 This will:
+
 - Test xhtml2pdf with simplified CSS
 - Test ReportLab (if installed)
 - Generate sample PDFs for comparison
@@ -176,34 +209,38 @@ This will:
 
 ### Common Issues
 
-**1. Module Not Found Errors**
+#### 1. Module Not Found Errors
+
 ```bash
 pip install --upgrade pip
 pip install langgraph langchain-google-genai langchain-community tavily-python markdown xhtml2pdf python-dotenv
 ```
 
-**2. API Key Errors**
+#### 2. API Key Errors
+
 - Ensure `.env` file exists in project root
 - Verify API keys are valid and active
 - Check for typos in environment variable names
 
-**3. PDF Generation Errors**
+#### 3. PDF Generation Errors
+
 - The system uses simplified CSS for xhtml2pdf compatibility
 - If issues persist, try: `pip install --upgrade xhtml2pdf`
 
-**4. Model Not Found (gemini-3-pro)**
-- The code defaults to `gemini-2.5-pro` if GOOGLE_API_KEY is missing
+#### 4. Model Not Found (gemini-3-pro)
+
+- The code defaults to `gemini-2.5-pro` if `GOOGLE_API_KEY` is missing
 - Check your API key has access to the specified model
 
 ## 📝 Dependencies
 
-- `langgraph` - Orchestration framework for multi-agent systems
-- `langchain-google-genai` - Google Gemini LLM integration
-- `langchain-community` - Community tools (Tavily search)
-- `tavily-python` - Advanced web search API
-- `markdown` - Markdown to HTML conversion
-- `xhtml2pdf` - PDF generation
-- `python-dotenv` - Environment variable management
+- **langgraph** - Orchestration framework for multi-agent systems
+- **langchain-google-genai** - Google Gemini LLM integration
+- **langchain-community** - Community tools (Tavily search)
+- **tavily-python** - Advanced web search API
+- **markdown** - Markdown to HTML conversion
+- **xhtml2pdf** - PDF generation
+- **python-dotenv** - Environment variable management
 
 ## 🔐 Security Notes
 
@@ -214,6 +251,7 @@ pip install langgraph langchain-google-genai langchain-community tavily-python m
 ## 📄 License
 
 This project is for educational and professional use. Ensure compliance with:
+
 - Google Gemini API Terms of Service
 - Tavily API Terms of Service
 - Relevant tax advisory regulations in your jurisdiction
@@ -225,6 +263,7 @@ This is a private repository. For issues or improvements, please contact the rep
 ## 👤 Author
 
 **Abdullah Usmani**
+
 - GitHub: [@Abdullah-Usmani0](https://github.com/Abdullah-Usmani0)
 
 ## 🙏 Acknowledgments
@@ -234,7 +273,6 @@ This is a private repository. For issues or improvements, please contact the rep
 - **Tavily** for advanced web search
 - **Hoxton Tax Limited** for the use case and branding inspiration
 
----
+## ⚠️ Disclaimer
 
-**⚠️ Disclaimer**: This system is a tool to assist tax professionals. All generated reports should be reviewed by qualified tax advisors before being provided to clients. The system does not constitute professional tax advice.
-
+This system is a tool to assist tax professionals. All generated reports should be reviewed by qualified tax advisors before being provided to clients. The system does not constitute professional tax advice.
