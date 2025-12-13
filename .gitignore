@@ -1,45 +1,35 @@
-# Environment Variables
-.env
-.env.local
-.env.*.local
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual Environment
 venv/
-.venv/
-ENV/
 env/
-.virtualenv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+*.egg-info/
 
-# Generated PDFs (exclude client reports)
-*_Tax_Report.pdf
-Simon_Tax_Report.pdf
-test_*.pdf
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IDE
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDEs
 .vscode/
 .idea/
 *.swp
@@ -47,18 +37,13 @@ test_*.pdf
 *~
 .DS_Store
 
-# Cursor
-.cursor/
+# Generated files
+*.pdf
+*.pyc
+Simon_Tax_Report.pdf
+test_reportlab.pdf
+test_simple_xhtml2pdf.pdf
 
-# Logs
-*.log
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# OS
-Thumbs.db
-.DS_Store
-
+# Temporary files
+/tmp/
+*.tmp
