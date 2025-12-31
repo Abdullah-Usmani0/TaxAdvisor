@@ -9,7 +9,7 @@ import queue
 import uuid
 
 from backend.models import WSMessage
-from backend.agents.workflow import build_workflow
+from backend.agents.workflow import build_workflow, get_workflow
 
 # Store workflow states (shared with routes.py)
 workflow_states: Dict[str, dict] = {}
@@ -317,6 +317,103 @@ async def run_workflow(thread_id: str, transcript: str):
             active_sessions[thread_id]["status"] = "error"
 
 
+async def run_resume(thread_id: str, approved_sources: list, manual_notes: str):
+    """Resume workflow from checkpoint via WebSocket"""
+    try:
+        # Store event loop reference for log streaming
+        loop = asyncio.get_running_loop()
+        manager.set_event_loop(loop)
+        
+        # Validate session exists
+        if thread_id not in active_sessions:
+            await manager.send_error(thread_id, "Session not found")
+            return
+        
+        config = active_sessions[thread_id]["config"]
+        workflow = get_workflow(websocket_manager=manager)
+        
+        # Update checkpoint state with new fields
+        try:
+            workflow.update_state(
+                config,
+                {
+                    "approved_sources": approved_sources,
+                    "manual_notes": manual_notes or ""
+                }
+            )
+        except AttributeError:
+            # Fallback to checkpointer access
+            checkpointer = workflow.checkpointer
+            checkpoint = checkpointer.get(config)
+            if checkpoint:
+                current_state = checkpoint.get("channel_values", {})
+                current_state["approved_sources"] = approved_sources
+                current_state["manual_notes"] = manual_notes or ""
+                checkpointer.put(config, current_state)
+        
+        # Resume by streaming with None - use background thread pattern (same as steps 1-3)
+        chunk_queue = queue.Queue()
+        final_state_ref = {"value": None}
+        stream_done = threading.Event()
+        stream_error = {"value": None}
+        
+        def run_resume_stream():
+            """Run workflow stream in sync thread"""
+            try:
+                for chunk in workflow.stream(None, config):
+                    chunk_queue.put(chunk)
+                stream_done.set()
+            except Exception as e:
+                import traceback
+                stream_error["value"] = f"{str(e)}\n{traceback.format_exc()}"
+                stream_done.set()
+        
+        # Start workflow stream in background thread
+        stream_thread = threading.Thread(target=run_resume_stream, daemon=True)
+        stream_thread.start()
+        
+        # Process chunks as they arrive (non-blocking, allows logs to stream in real-time)
+        try:
+            while not stream_done.is_set() or not chunk_queue.empty():
+                try:
+                    chunk = chunk_queue.get(timeout=0.1)
+                    for node_name, node_output in chunk.items():
+                        if node_name == "writer":
+                            if final_state_ref["value"] is None:
+                                final_state_ref["value"] = {}
+                            final_state_ref["value"].update(node_output)
+                            if "final_report_md" in final_state_ref["value"]:
+                                break
+                except queue.Empty:
+                    pass
+                await asyncio.sleep(0.05)
+        finally:
+            stream_thread.join(timeout=5)
+            if stream_error["value"]:
+                raise Exception(stream_error["value"])
+        
+        # Get final result
+        result = final_state_ref["value"] if final_state_ref["value"] else {}
+        
+        # Update stored state
+        workflow_states[thread_id] = result
+        active_sessions[thread_id]["status"] = "completed"
+        
+        # Send completion messages
+        await manager.send_progress(thread_id, "complete", 100)
+        await manager.send_log(thread_id, "Report generation complete!", "success")
+        await manager.send_complete(thread_id)
+    
+    except Exception as e:
+        import traceback
+        error_msg = f"Resume error: {str(e)}"
+        print(f"ERROR in run_resume: {error_msg}")
+        print(f"Traceback: {traceback.format_exc()}")
+        await manager.send_error(thread_id, error_msg)
+        if thread_id in active_sessions:
+            active_sessions[thread_id]["status"] = "error"
+
+
 @router.websocket("/ws/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     """
@@ -350,6 +447,18 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     
                     # Start workflow in background task
                     asyncio.create_task(run_workflow(thread_id, transcript))
+                
+                # Handle resume message
+                elif message.get("type") == "resume":
+                    approved_sources = message.get("approved_sources", [])
+                    manual_notes = message.get("manual_notes", "")
+                    
+                    if not isinstance(approved_sources, list):
+                        await manager.send_error(thread_id, "Invalid approved_sources in resume message")
+                        continue
+                    
+                    # Resume workflow in background task
+                    asyncio.create_task(run_resume(thread_id, approved_sources, manual_notes))
                 
                 # Handle ping/pong
                 elif message.get("type") == "ping":

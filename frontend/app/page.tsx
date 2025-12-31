@@ -54,6 +54,7 @@ export default function Home() {
     },
     onComplete: () => {
       setAppState('complete');
+      setIsLoading(false);
     },
     onError: (message) => {
       console.error("Workflow error:", message.data.message);
@@ -106,20 +107,19 @@ export default function Home() {
     setCurrentStep('writing');
     setProgressPercentage(90);
     
-    try {
-      await approveCheckpoint({
-        thread_id: threadId,
-        approved_sources: approvedIndices,
-        manual_notes: notes,
-        action: 'approve',
-      });
-      // Note: Progress will be updated via WebSocket messages from writer node
-    } catch (error) {
-      console.error("Failed to approve checkpoint:", error);
-      alert("Failed to approve checkpoint. Please try again.");
-    } finally {
+    // Send resume message via WebSocket (instead of REST API)
+    const sent = sendMessage({
+      type: "resume",
+      approved_sources: approvedIndices,
+      manual_notes: notes
+    });
+    
+    if (!sent) {
+      alert("Failed to send resume message. Please try again.");
       setIsLoading(false);
     }
+    // Note: Progress will be updated via WebSocket messages from writer node
+    // isLoading will be reset when complete message is received via onComplete callback
   };
 
   const handleAbortCheckpoint = () => {

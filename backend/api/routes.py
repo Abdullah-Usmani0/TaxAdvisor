@@ -213,8 +213,8 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
         if not isinstance(current_state, dict):
             raise HTTPException(status_code=400, detail="Invalid workflow state")
         
-        # Update checkpoint state with new fields, then invoke with None to resume
-        # LangGraph requires invoke(None, config) to load from checkpoint, not full state
+        # Update checkpoint state with new fields, then stream with None to resume
+        # LangGraph requires stream(None, config) to load from checkpoint and stream logs in real-time
         try:
             # Option 1: Use update_state() if available (preferred)
             workflow.update_state(
@@ -224,8 +224,6 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
                     "manual_notes": request.manual_notes or ""
                 }
             )
-            # Resume by invoking with None - LangGraph loads checkpoint and continues from writer
-            result = workflow.invoke(None, config)
         except AttributeError:
             # Option 2: Access checkpointer directly if update_state() not available
             checkpointer = workflow.checkpointer
@@ -238,9 +236,56 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
                 current_state["manual_notes"] = request.manual_notes or ""
                 # Update checkpoint
                 checkpointer.put(config, current_state)
-            
-            # Resume by invoking with None
-            result = workflow.invoke(None, config)
+        
+        # Resume by streaming with None - LangGraph loads checkpoint and streams logs in real-time
+        # Use background thread pattern (same as steps 1-3) so logs stream in real-time
+        import threading
+        import queue
+        
+        chunk_queue = queue.Queue()
+        final_state_ref = {"value": None}
+        stream_done = threading.Event()
+        stream_error = {"value": None}
+        
+        def run_resume_stream():
+            """Run workflow stream in sync thread"""
+            try:
+                for chunk in workflow.stream(None, config):
+                    chunk_queue.put(chunk)
+                stream_done.set()
+            except Exception as e:
+                import traceback
+                stream_error["value"] = f"{str(e)}\n{traceback.format_exc()}"
+                stream_done.set()
+        
+        # Start workflow stream in background thread
+        stream_thread = threading.Thread(target=run_resume_stream, daemon=True)
+        stream_thread.start()
+        
+        # Process chunks as they arrive (non-blocking, allows logs to stream in real-time)
+        try:
+            while not stream_done.is_set() or not chunk_queue.empty():
+                try:
+                    chunk = chunk_queue.get(timeout=0.1)
+                    for node_name, node_output in chunk.items():
+                        if node_name == "writer":
+                            # Writer node completed - accumulate state
+                            if final_state_ref["value"] is None:
+                                final_state_ref["value"] = {}
+                            final_state_ref["value"].update(node_output)
+                            if "final_report_md" in final_state_ref["value"]:
+                                break
+                except queue.Empty:
+                    pass
+                # Small sleep to prevent busy waiting
+                await asyncio.sleep(0.05)
+        finally:
+            stream_thread.join(timeout=5)
+            if stream_error["value"]:
+                raise Exception(stream_error["value"])
+        
+        # Get final result from accumulated state
+        result = final_state_ref["value"] if final_state_ref["value"] else {}
         
         # Send completion messages via WebSocket so frontend updates
         await manager.send_progress(thread_id, "complete", 100)
