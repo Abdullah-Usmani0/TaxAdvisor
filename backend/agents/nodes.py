@@ -1,5 +1,6 @@
 """Tax consultancy agent nodes - extracted and refactored from agent2.py"""
 import os
+import asyncio
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -35,33 +36,76 @@ class TaxConsultancyAgents:
         Args:
             websocket_manager: Optional WebSocket manager for real-time updates
         """
-        # Determine LLM model based on API key availability
-        llm_model = "gemini-3-pro-preview" if settings.google_api_key else "gemini-2.5-pro"
+        # Use gemini-2.5-pro (free tier compatible)
+        llm_model = "gemini-2.5-pro"
         
-        self.llm = ChatGoogleGenerativeAI(model=llm_model, temperature=0)
+        # Pass API key explicitly
+        self.llm = ChatGoogleGenerativeAI(
+            model=llm_model,
+            temperature=0,
+            google_api_key=settings.google_api_key
+        )
         self.search_tool = TavilySearchResults(
             max_results=5,
             search_depth="advanced",
-            include_raw_content=True
+            include_raw_content=True,
+            tavily_api_key=settings.tavily_api_key
         )
         self.ws_manager = websocket_manager
     
-    async def _send_log(self, thread_id: str, message: str, log_type: str = "info"):
-        """Send log message via WebSocket if available"""
+    def _send_log_sync(self, thread_id: str, message: str, log_type: str = "info"):
+        """Send log message via WebSocket immediately (sync wrapper for async)"""
         if self.ws_manager and thread_id:
-            await self.ws_manager.send_log(thread_id, message, log_type)
+            try:
+                # Get event loop from manager (stored when workflow starts)
+                loop = getattr(self.ws_manager, 'event_loop', None)
+                if not loop:
+                    print(f"WARNING: No event loop for thread {thread_id} - log not sent: {message[:50]}")
+                    return
+                
+                # Send log immediately using thread-safe coroutine runner
+                future = asyncio.run_coroutine_threadsafe(
+                    self.ws_manager.send_log(thread_id, message, log_type),
+                    loop
+                )
+                # Check if it completes (with timeout to avoid blocking)
+                try:
+                    future.result(timeout=0.1)
+                except Exception as e:
+                    print(f"DEBUG: Log send may have failed: {e}")
+            except Exception as e:
+                print(f"ERROR sending log: {e}")
+                import traceback
+                traceback.print_exc()
+    
+    def _send_progress_sync(self, thread_id: str, current_step: str, progress_percentage: int):
+        """Send progress update via WebSocket immediately (sync wrapper for async)"""
+        if self.ws_manager and thread_id:
+            try:
+                # Get event loop from manager (stored when workflow starts)
+                loop = getattr(self.ws_manager, 'event_loop', None)
+                if not loop:
+                    print(f"WARNING: No event loop for thread {thread_id} - progress not sent")
+                    return
+                asyncio.run_coroutine_threadsafe(
+                    self.ws_manager.send_progress(thread_id, current_step, progress_percentage),
+                    loop
+                )
+            except Exception as e:
+                print(f"ERROR sending progress: {e}")  # Temporary debug logging
     
     # --- NODE 1: EXTRACTOR ---
-    async def extract_profile(self, state: dict):
+    def extract_profile(self, state: dict):
         """Extract client profile from transcript"""
         thread_id = state.get("thread_id", "")
         
-        await self._send_log(thread_id, "Starting profile extraction...", "info")
+        self._send_log_sync(thread_id, "🔍 [STEP 1/4] EXTRACTING CLIENT PROFILE", "info")
         print(f"\n{'='*60}")
         print(f"🔍 [STEP 1/4] EXTRACTING CLIENT PROFILE")
         print(f"{'='*60}")
         
         transcript = state["transcript"]
+        self._send_log_sync(thread_id, f"📝 Processing transcript ({len(transcript)} characters)...", "info")
         print(f"📝 Processing transcript ({len(transcript)} characters)...")
         
         prompt = ChatPromptTemplate.from_messages([
@@ -70,30 +114,35 @@ class TaxConsultancyAgents:
         ])
         
         extractor = prompt | self.llm.with_structured_output(ClientProfile)
-        
-        await self._send_log(thread_id, "Calling Gemini API for structured extraction...", "info")
         profile = extractor.invoke({"transcript": transcript})
         
-        await self._send_log(thread_id, f"✓ Profile extracted: {profile.client_name}", "success")
+        self._send_log_sync(thread_id, "✅ Profile extracted successfully!", "success")
+        self._send_log_sync(thread_id, f"   - Client Name: {profile.client_name}", "info")
+        self._send_log_sync(thread_id, f"   - Current Tax Residency: {profile.tax_residency_current}", "info")
+        self._send_log_sync(thread_id, f"   - Target Tax Residency: {profile.tax_residency_target}", "info")
         print(f"✅ Profile extracted successfully!")
         print(f"   - Client Name: {profile.client_name}")
         print(f"   - Current Tax Residency: {profile.tax_residency_current}")
         print(f"   - Target Tax Residency: {profile.tax_residency_target}")
         
+        # Send progress update - extractor complete, move to planning
+        self._send_progress_sync(thread_id, "planning", 25)
+        
         # Convert to dict for state
         return {"profile": profile.model_dump()}
     
     # --- NODE 2: PLANNER ---
-    async def plan_research(self, state: dict):
+    def plan_research(self, state: dict):
         """Plan research strategy based on client profile"""
         thread_id = state.get("thread_id", "")
         profile_dict = state["profile"]
         profile = ClientProfile(**profile_dict)
         
-        await self._send_log(thread_id, "Planning research strategy...", "info")
+        self._send_log_sync(thread_id, "📋 [STEP 2/4] PLANNING RESEARCH STRATEGY", "info")
         print(f"\n{'='*60}")
         print(f"📋 [STEP 2/4] PLANNING RESEARCH STRATEGY")
         print(f"{'='*60}")
+        self._send_log_sync(thread_id, f"🎯 Analyzing: {profile.tax_residency_current} → {profile.tax_residency_target}", "info")
         print(f"🎯 Analyzing: {profile.tax_residency_current} → {profile.tax_residency_target}")
         
         prompt = ChatPromptTemplate.from_messages([
@@ -103,23 +152,27 @@ class TaxConsultancyAgents:
         
         planner = prompt | self.llm.with_structured_output(ResearchPlan)
         plan = planner.invoke({"profile_data": profile.model_dump_json()})
-        
-        await self._send_log(thread_id, f"✓ Research plan created with {len(plan.queries)} queries", "success")
+        self._send_log_sync(thread_id, "✅ Research plan created!", "success")
+        self._send_log_sync(thread_id, f"   - Number of queries: {len(plan.queries)}", "info")
         print(f"✅ Research plan created!")
         print(f"   - Number of queries: {len(plan.queries)}")
         for i, query in enumerate(plan.queries, 1):
+            self._send_log_sync(thread_id, f"   {i}. {query}", "info")
             print(f"   {i}. {query}")
+        
+        # Send progress update - planner complete, move to researching
+        self._send_progress_sync(thread_id, "researching", 50)
         
         return {"research_plan": plan.model_dump()}
     
     # --- NODE 3: RESEARCHER ---
-    async def execute_research(self, state: dict):
+    def execute_research(self, state: dict):
         """Execute research using Tavily search"""
         thread_id = state.get("thread_id", "")
         plan_dict = state["research_plan"]
         plan = ResearchPlan(**plan_dict)
         
-        await self._send_log(thread_id, f"Starting research with {len(plan.queries)} queries...", "info")
+        self._send_log_sync(thread_id, "🔎 [STEP 3/4] EXECUTING LEGAL RESEARCH", "info")
         print(f"\n{'='*60}")
         print(f"🔎 [STEP 3/4] EXECUTING LEGAL RESEARCH")
         print(f"{'='*60}")
@@ -128,13 +181,13 @@ class TaxConsultancyAgents:
         
         for i, query in enumerate(plan.queries, 1):
             try:
-                await self._send_log(thread_id, f"→ Searching [{i}/{len(plan.queries)}]: {query[:50]}...", "info")
+                self._send_log_sync(thread_id, f"[{i}/{len(plan.queries)}] Searching: {query[:70]}...", "info")
                 print(f"   [{i}/{len(plan.queries)}] Searching: {query[:70]}...")
                 
                 enhanced_query = f"{query} current tax legislation 2024 2025"
                 results = self.search_tool.invoke(enhanced_query)
                 
-                await self._send_log(thread_id, f"✓ Found {len(results)} sources", "success")
+                self._send_log_sync(thread_id, f"✓ Found {len(results)} sources", "success")
                 print(f"       ✓ Found {len(results)} sources")
                 
                 snippet_text = "\n".join([
@@ -144,18 +197,22 @@ class TaxConsultancyAgents:
                 compiled_research.append(f"### Query: {query}\n{snippet_text}\n")
                 
             except Exception as e:
-                await self._send_log(thread_id, f"✗ Search failed: {str(e)}", "error")
+                self._send_log_sync(thread_id, f"✗ Search failed: {e}", "error")
                 print(f"       ✗ Search failed: {e}")
         
         total_content = "\n".join(compiled_research)
-        await self._send_log(thread_id, f"✓ Research complete! Gathered ~{len(plan.queries) * 5} sources", "success")
+        self._send_log_sync(thread_id, "✅ Research complete!", "success")
+        self._send_log_sync(thread_id, f"   - Research context size: {len(total_content)} characters", "info")
         print(f"\n✅ Research complete!")
         print(f"   - Research context size: {len(total_content)} characters")
+        
+        # Send progress update - researcher complete, checkpoint reached (stays at researching until approved)
+        self._send_progress_sync(thread_id, "researching", 75)
         
         return {"research_context": total_content}
     
     # --- NODE 4: WRITER ---
-    async def write_report(self, state: dict):
+    def write_report(self, state: dict):
         """Generate comprehensive tax report"""
         thread_id = state.get("thread_id", "")
         profile_dict = state["profile"]
@@ -171,10 +228,11 @@ class TaxConsultancyAgents:
             # Simple filtering - in production, would parse and filter by index
             context = f"{context}\n\nHUMAN REVIEWER NOTES:\n{manual_notes}"
         
-        await self._send_log(thread_id, "Writing comprehensive tax report...", "info")
+        self._send_log_sync(thread_id, "✍️  [STEP 4/4] WRITING COMPREHENSIVE TAX REPORT", "info")
         print(f"\n{'='*60}")
         print(f"✍️  [STEP 4/4] WRITING COMPREHENSIVE TAX REPORT")
         print(f"{'='*60}")
+        self._send_log_sync(thread_id, f"📊 Preparing report for {profile.client_name}...", "info")
         print(f"📊 Preparing report for {profile.client_name}...")
         
         prompt_template = """
@@ -210,7 +268,6 @@ class TaxConsultancyAgents:
         prompt = ChatPromptTemplate.from_template(prompt_template)
         chain = prompt | self.llm
         
-        await self._send_log(thread_id, "Generating report with Gemini...", "info")
         report = chain.invoke({
             "client_name": profile.client_name,
             "profile_json": profile.model_dump_json(),
@@ -224,9 +281,13 @@ class TaxConsultancyAgents:
         else:
             report_text = report.content
         
-        await self._send_log(thread_id, "✓ Report generated successfully!", "success")
+        self._send_log_sync(thread_id, "✅ Report generated successfully!", "success")
+        self._send_log_sync(thread_id, f"   - Report length: {len(report_text)} characters", "info")
         print(f"✅ Report generated successfully!")
         print(f"   - Report length: {len(report_text)} characters")
+        
+        # Send progress update - writer complete, workflow finished
+        self._send_progress_sync(thread_id, "writing", 100)
         
         return {"final_report_md": report_text}
 

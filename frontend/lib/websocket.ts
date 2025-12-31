@@ -119,18 +119,48 @@ export function useWebSocket(threadId: string | null, options: UseWebSocketOptio
   const sendMessage = useCallback((message: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
+      return true;
     }
+    return false;
+  }, []);
+
+  const waitForConnection = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        resolve(true);
+        return;
+      }
+      
+      const checkConnection = setInterval(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          clearInterval(checkConnection);
+          resolve(true);
+        } else if (wsRef.current?.readyState === WebSocket.CLOSED) {
+          clearInterval(checkConnection);
+          resolve(false);
+        }
+      }, 100);
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkConnection);
+        resolve(false);
+      }, 5000);
+    });
   }, []);
 
   useEffect(() => {
-    connect();
-    return () => disconnect();
-  }, [connect, disconnect]);
+    if (threadId) {
+      connect();
+      return () => disconnect();
+    }
+  }, [threadId]);
 
   return {
     isConnected,
     connectionError,
     sendMessage,
+    waitForConnection,
     disconnect,
     reconnect: connect,
   };

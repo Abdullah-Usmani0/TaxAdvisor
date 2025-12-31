@@ -21,10 +21,8 @@ from backend.agents.checkpoints import parse_research_sources, get_checkpoint_st
 
 router = APIRouter()
 
-# In-memory storage for active sessions (MVP)
-# TODO: Replace with Redis or PostgreSQL for production
-active_sessions = {}
-workflow_states = {}
+# Import shared state storage from websocket module
+from backend.api.websocket import active_sessions, workflow_states
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -175,8 +173,8 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
         current_state["approved_sources"] = request.approved_sources
         current_state["manual_notes"] = request.manual_notes or ""
         
-        # Resume workflow from checkpoint
-        result = await workflow.ainvoke(current_state, config)
+        # Resume workflow from checkpoint (use invoke since nodes are sync)
+        result = workflow.invoke(current_state, config)
         
         # Update stored state
         workflow_states[thread_id] = result

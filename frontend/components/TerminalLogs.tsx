@@ -20,7 +20,8 @@ export default function TerminalLogs({ logs, maxLogs = 10 }: TerminalLogsProps) 
     }
   }, [logs]);
 
-  const visibleLogs = logs.slice(-maxLogs);
+  // Show all logs - no limit/flushing
+  const visibleLogs = logs;
 
   const getLogColor = (logType?: string) => {
     switch (logType) {

@@ -9,7 +9,6 @@ import CheckpointReview from "@/components/CheckpointReview";
 import ReportViewer from "@/components/ReportViewer";
 import { useWebSocket } from "@/lib/websocket";
 import {
-  startAnalysis,
   getCheckpoint,
   approveCheckpoint,
 } from "@/lib/api";
@@ -28,7 +27,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
 
   // WebSocket connection
-  useWebSocket(threadId, {
+  const { sendMessage, waitForConnection } = useWebSocket(threadId, {
     onLog: (message) => {
       setLogs((prev) => [...prev, message]);
     },
@@ -57,24 +56,44 @@ export default function Home() {
     onError: (message) => {
       console.error("Workflow error:", message.data.message);
       setLogs((prev) => [...prev, message]);
+      setIsLoading(false);
     },
   });
 
   // Handlers
   const handleStartAnalysis = async (transcript: string) => {
     setIsLoading(true);
-    try {
-      const response = await startAnalysis(transcript);
-      setThreadId(response.thread_id);
-      setAppState('processing');
-      setCurrentStep('extracting');
-      setProgressPercentage(0);
-    } catch (error) {
-      console.error("Failed to start analysis:", error);
-      alert("Failed to start analysis. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
+    
+    // Generate thread_id first
+    const threadId = crypto.randomUUID();
+    setThreadId(threadId);
+    setAppState('processing');
+    setCurrentStep('extracting');
+    setProgressPercentage(0);
+    setLogs([]); // Clear previous logs
+    
+    // Wait for WebSocket to connect, then send start message
+    waitForConnection().then((connected) => {
+      if (!connected) {
+        alert("WebSocket connection failed. Please try again.");
+        setAppState('input');
+        setThreadId(null);
+        setIsLoading(false);
+        return;
+      }
+      
+      const sent = sendMessage({
+        type: "start",
+        transcript: transcript
+      });
+      
+      if (!sent) {
+        alert("Failed to send start message. Please try again.");
+        setAppState('input');
+        setThreadId(null);
+        setIsLoading(false);
+      }
+    });
   };
 
   const handleApproveCheckpoint = async (approvedIndices: number[], notes: string) => {
