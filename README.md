@@ -1,252 +1,377 @@
 # 🏢 Hoxton Tax Limited - AI Tax Consultancy System
 
-An intelligent multi-agent tax consultancy system powered by Google Gemini and LangGraph that automatically analyzes tax residency scenarios and generates professional PDF reports.
+A professional AI-powered tax consultancy system with **human-in-the-loop checkpointing** for research review. Built with Next.js 14, FastAPI, Google Gemini, and LangGraph.
 
-## 🌟 Features
+## ✨ Features
 
 - **🔍 Intelligent Profile Extraction**: Automatically extracts client information from conversation transcripts
-- **📋 Research Planning**: AI-powered research strategy generation focusing on Statutory Residence Tests and Double Tax Treaties
-- **🔎 Legal Research**: Deep web search using Tavily API for current tax legislation (2024-2025)
-- **✍️ Report Generation**: Comprehensive, professionally formatted tax reports with detailed analysis
+- **📋 Research Planning**: AI-powered research strategy generation for tax legislation
+- **🔎 Legal Research**: Deep web search using Tavily API for current tax laws
+- **⏸️ Human-in-the-Loop Checkpointing**: Pause workflow after research for human review and approval
+- **✍️ Report Generation**: Comprehensive, professionally formatted tax reports
 - **📄 PDF Export**: Beautiful, branded PDF reports with Hoxton Tax styling
-- **📊 Detailed Logging**: Step-by-step visibility into the entire process
+- **🔄 Real-time Progress**: WebSocket-based live updates with terminal-style logs
+- **🎨 Professional UI**: Vercel-inspired animations with smooth transitions
 
-## 🎯 Use Case
+## 🏗️ Architecture
 
-This system is designed for tax consultants and advisors who need to:
+```
+┌─────────────────┐         ┌──────────────────┐
+│  Next.js 14     │ ◄─────► │   FastAPI        │
+│  Frontend       │  REST   │   Backend        │
+│  (Port 3000)    │  WebSocket (Port 8000)      │
+└─────────────────┘         └──────────────────┘
+        │                            │
+        │                            │
+        ▼                            ▼
+┌─────────────────┐         ┌──────────────────┐
+│  Framer Motion  │         │   LangGraph      │
+│  Tailwind CSS   │         │   + Checkpointing│
+└─────────────────┘         └──────────────────┘
+                                     │
+                            ┌────────┴─────────┐
+                            │                  │
+                            ▼                  ▼
+                    ┌──────────────┐   ┌──────────────┐
+                    │ Google Gemini│   │ Tavily Search│
+                    └──────────────┘   └──────────────┘
+```
 
-- Analyze cross-border tax residency scenarios
-- Understand Statutory Residence Test (SRT) implications
-- Review Double Tax Treaty (DTT) provisions
-- Generate detailed client reports with legal backing
+## 📁 Project Structure
+
+```
+TaxAdvisor/
+├── backend/                      # FastAPI Backend
+│   ├── agents/
+│   │   ├── nodes.py             # Agent node functions
+│   │   ├── workflow.py          # LangGraph workflow with checkpointing
+│   │   └── checkpoints.py       # Checkpoint management
+│   ├── api/
+│   │   ├── routes.py            # REST API endpoints
+│   │   └── websocket.py         # WebSocket for real-time updates
+│   ├── config.py                # Configuration management
+│   ├── models.py                # Pydantic models
+│   ├── main.py                  # FastAPI app entry point
+│   └── requirements.txt         # Python dependencies
+│
+├── frontend/                     # Next.js 14 Frontend
+│   ├── app/
+│   │   ├── page.tsx             # Main UI page
+│   │   ├── layout.tsx           # Root layout
+│   │   └── globals.css          # Tailwind styles
+│   ├── components/
+│   │   ├── TranscriptInput.tsx  # Transcript input component
+│   │   ├── ProgressTracker.tsx  # Animated progress stepper
+│   │   ├── TerminalLogs.tsx     # Vercel-style terminal logs
+│   │   ├── CheckpointReview.tsx # Human review panel
+│   │   └── ReportViewer.tsx     # Report display & download
+│   ├── lib/
+│   │   ├── api.ts               # API client functions
+│   │   ├── websocket.ts         # WebSocket hook
+│   │   └── utils.ts             # Utility functions
+│   ├── types/
+│   │   └── index.ts             # TypeScript definitions
+│   └── package.json
+│
+├── agent.py                      # Original CLI version (reference)
+├── agent2.py                     # Enhanced CLI version (reference)
+└── README.md                     # This file
+```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
+- Node.js 18+
 - Google Gemini API Key
 - Tavily API Key (for web research)
 
-### Installation
+**macOS System Dependencies:**
+```bash
+# Required for pycairo (PDF generation)
+brew install pkg-config cairo
+```
 
-#### 1. Clone the repository
+### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Abdullah-Usmani0/TaxAdvisor.git
+git clone https://github.com/yourusername/TaxAdvisor.git
 cd TaxAdvisor
 ```
 
-#### 2. Create a virtual environment
+### 2. Backend Setup
 
 ```bash
+cd backend
+
+# Create virtual environment
 python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Windows
-.\venv\Scripts\activate
+# Install dependencies
+pip install -r requirements.txt
 
-# Linux/Mac
-source venv/bin/activate
+# Create .env file in project root
+cd ..  # Go back to project root
+cat > .env << EOF
+GOOGLE_API_KEY=your_gemini_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+FRONTEND_URL=http://localhost:3000
+PORT=8000
+CHECKPOINT_STORAGE=memory
+EOF
+
+# Edit .env and add your actual API keys
+cd backend  # Return to backend directory
 ```
 
-#### 3. Install dependencies
+### 3. Frontend Setup
 
 ```bash
-pip install langgraph langchain-google-genai langchain-community tavily-python markdown xhtml2pdf python-dotenv
+cd ../frontend
+
+# Install dependencies
+npm install
+
+# Optional: Create .env.local file if you need custom API URL
+# Default values work for local development (http://localhost:8000)
 ```
 
-#### 4. Set up environment variables
+### 4. Run the Application
 
-Create a `.env` file in the project root:
-
+**Terminal 1 - Backend:**
+```bash
+cd backend
+source venv/bin/activate  # Activate virtual environment (Windows: venv\Scripts\activate)
+uvicorn main:app --reload --port 8000
 ```
-GOOGLE_API_KEY=your_google_api_key_here
-TAVILY_API_KEY=your_tavily_api_key_here
+
+**Terminal 2 - Frontend:**
+```bash
+cd frontend
+npm run dev
 ```
 
-#### 5. Get API Keys
-
-- **Google Gemini API**: [Get API Key](https://makersuite.google.com/app/apikey)
-- **Tavily API**: [Get API Key](https://tavily.com)
+**Access the application:**
+- Frontend: http://localhost:3000
+- Backend API Docs: http://localhost:8000/docs
+- Health Check: http://localhost:8000/health
 
 ## 💻 Usage
 
-Run the main agent:
+### 1. Enter Transcript
 
-```bash
-python agent2.py
-```
-
-The system will:
-
-1. 🔍 Extract client profile from the transcript
-2. 📋 Plan research strategy
-3. 🔎 Execute deep web searches for tax legislation
-4. ✍️ Generate comprehensive tax report
-5. 📄 Create professional PDF output
-
-### Example Output
+Paste a conversation between a tax advisor and client. Example format:
 
 ```
-████████████████████████████████████████████████████████████
-█       🏢 HOXTON TAX LIMITED - AI TAX CONSULTANCY SYSTEM   █
-█            Powered by Google Gemini & LangGraph           █
-████████████████████████████████████████████████████████████
-
-============================================================
-🔍 [STEP 1/4] EXTRACTING CLIENT PROFILE
-============================================================
-📝 Processing transcript (487 characters)...
-🤖 Calling Gemini API for structured extraction...
-✅ Profile extracted successfully!
-   - Client Name: Simon
-   - Current Tax Residency: United Kingdom
-   - Target Tax Residency: Saudi Arabia (KSA)
-   ...
+Advisor: Hi Simon, let's discuss your tax situation.
+Simon: I'm moving to Saudi Arabia next month.
+Advisor: And your family?
+Simon: My wife is staying in London for the kids' school...
 ```
 
-## 🔮 Future Roadmap
+### 2. Start Analysis
 
-To evolve this MVP into a fully commercial Tax Consultancy Platform, the following features and capabilities are planned for implementation:
+Click **"Start Tax Analysis"** to begin the workflow:
 
-### 1. Intelligence & Accuracy Layers (The "Brain")
+- ✅ **Extract Profile**: AI analyzes the transcript
+- ✅ **Plan Research**: Creates research strategy
+- ✅ **Execute Research**: Searches tax legislation
+- ⏸️ **Checkpoint**: Workflow pauses for review
 
-- [ ] **Internal Knowledge Base (RAG)**: Integrate a vector database (Pinecone/Chroma) to store and retrieve internal firm precedents, past reports, and trusted tax PDFs. The agent will prioritize this "source of truth" before searching the web.
-- [ ] **Fact-Check Agent ("The Auditor")**: Add a dedicated node that verifies every citation in the generated draft against actual statutes, rejecting vague references.
-- [ ] **Scenario Modeling**: Enhance the planner to generate "A/B Scenarios" (e.g., "Sell vs. Rent") and automatically produce comparison tables in the final report.
+### 3. Review Research
 
-### 2. User Interface & Experience
+A panel slides in from the right showing:
 
-- [ ] **Streaming UI**: Develop a frontend that displays the agent's thought process (e.g., "Searching UK-Saudi Treaty...") in real-time "thought bubbles" to build user trust.
-- [ ] **Human-in-the-Loop (Checkpointing)**: Implement LangGraph "interrupts" to pause the workflow after research. This allows a human consultant to review the research plan, add missing documents, or correct assumptions before the report is written.
-- [ ] **Dynamic Template Builder**: Create a drag-and-drop editor allowing users to map variables (e.g., `{{client_name}}`) to custom PDF templates, removing hardcoded prompt reliance.
+- Client profile summary
+- Research queries executed
+- All sources found (with checkboxes)
+- Option to add manual notes
 
-### 3. Data Handling & Infrastructure
+You can:
+- ✅ **Approve selected sources** and continue
+- ❌ **Remove bad sources**
+- ➕ **Add manual research notes**
+- 🚫 **Abort** the analysis
 
-- [ ] **Dockerization**: Containerize the entire application to ensure system dependencies (like those required for PDF generation) work consistently across Windows, Linux, and Mac.
-- [ ] **PII Redaction Node**: Insert a security layer at the start of the graph to detect and redact sensitive client data (Tax IDs, phone numbers) before sending context to third-party LLMs.
+### 4. Generate & Download Report
 
-### 4. Advanced Capabilities
+Once approved, the AI generates a comprehensive PDF report. The workflow continues automatically:
 
-- [ ] **Follow-up Q&A Mode**: Enable a chat interface post-report generation, allowing consultants to interrogate the AI about its specific findings (e.g., "Why did you apply the Split Year treatment?").
-- [ ] **Multi-Modal Input (OCR)**: Add an OCR agent capable of reading uploaded documents (P60s, Tax Returns) to automatically populate the Client Profile without manual data entry.
+- ✅ **Write Report**: AI generates report using approved sources and your manual notes
+- 📊 **Real-time Progress**: Watch step 4 logs stream in real-time (same as steps 1-3)
+- 📄 **Completion**: When complete, the page automatically scrolls down to show:
+  - "Analysis Complete" section
+  - Full report preview
+  - PDF download button
+  - "Start New Analysis" button
 
-## 📁 Project Structure
+**Report includes:**
+- Executive Summary
+- Client Situation
+- UK Statutory Residence Test Analysis
+- Double Tax Treaty Analysis
+- Recommendations
+- Disclaimer
 
-```
-TaxAdvisor/
-├── agent2.py                    # Main application (enhanced with logging)
-├── agent.py                     # Previous version (reference)
-├── test_pdf_generation.py       # PDF generation testing suite
-├── .env                         # Environment variables (create this)
-├── README.md                    # This file
-└── requirements.txt             # Python dependencies (optional)
-```
+**Note:** The processing UI (progress tracker and logs) remains visible above the completion section, so you can see the full journey on one page.
 
 ## 🔧 Configuration
 
-### Changing the LLM Model
+### Backend Configuration
 
-In `agent2.py`, modify the configuration section:
-
-```python
-# Use gemini-2.5-pro if GOOGLE_API_KEY is not set
-# Use gemini-3-pro-preview if GOOGLE_API_KEY is set
-LLM_MODEL = "gemini-2.5-pro"  # or "gemini-3-pro-preview"
-```
-
-### Customizing the Research
-
-Modify the research planner prompt in `TaxConsultancyAgents.plan_research()`:
-
-```python
-("system", "You are a Senior Tax Partner. Plan the research for this client. 
-Focus on Statutory Residence Tests, Double Tax Treaties, and specific local 
-tax laws (e.g., UK, KSA, Italy).")
-```
-
-### PDF Styling
-
-Customize the Hoxton Tax branding in `generate_pdf_report()`:
-
-- **Primary Color**: #1A4D2E (Dark Green)
-- **Font**: Helvetica/Arial
-- **Page Size**: A4
-- **Margins**: 2.5cm
-
-## 📊 Report Structure
-
-Generated reports include:
-
-1. **Executive Summary**: High-level overview of the tax situation
-2. **Premise (Client Situation)**: Detailed client circumstances
-3. **UK Statutory Residence Test (SRT) Analysis**:
-   - Day count scenarios
-   - Tie analysis
-   - Residency determination
-4. **Double Tax Treaty (DTT) Analysis**:
-   - Article-by-article review
-   - Tie-breaker clauses
-   - Tax implications
-5. **Recommendations and Planning Summary**: Actionable advice
-6. **Disclaimer**: Professional liability disclaimer
-
-## 🧪 Testing PDF Generation
-
-Test different PDF generation approaches:
+Edit `.env` in the project root:
 
 ```bash
-python test_pdf_generation.py
+GOOGLE_API_KEY=your_api_key_here
+TAVILY_API_KEY=your_api_key_here
+FRONTEND_URL=http://localhost:3000
+PORT=8000
+CHECKPOINT_STORAGE=memory  # Options: memory, postgres
 ```
 
-This will:
+### Frontend Configuration
 
-- Test xhtml2pdf with simplified CSS
-- Test ReportLab (if installed)
-- Generate sample PDFs for comparison
-
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-#### 1. Module Not Found Errors
+Edit `frontend/.env.local`:
 
 ```bash
-pip install --upgrade pip
-pip install langgraph langchain-google-genai langchain-community tavily-python markdown xhtml2pdf python-dotenv
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000
 ```
 
-#### 2. API Key Errors
+## 🎨 Design System
 
-- Ensure `.env` file exists in project root
-- Verify API keys are valid and active
-- Check for typos in environment variable names
+### Colors
 
-#### 3. PDF Generation Errors
+- **Primary (Hoxton Green)**: `#1A4D2E`
+- **Success**: `#22c55e`
+- **Warning**: `#f97316`
+- **Error**: `#ef4444`
 
-- The system uses simplified CSS for xhtml2pdf compatibility
-- If issues persist, try: `pip install --upgrade xhtml2pdf`
+### Animations
 
-#### 4. Model Not Found (gemini-3-pro)
+- **Terminal logs**: Fade-in from bottom (200ms, ease-out)
+- **Progress steps**: Scale animation for completions (300ms)
+- **Checkpoint panel**: Slide from right (400ms, ease-out)
+- **No bouncy/playful animations** (professional tone)
 
-- The code defaults to `gemini-2.5-pro` if `GOOGLE_API_KEY` is missing
-- Check your API key has access to the specified model
+## 📊 API Endpoints
 
-## 📝 Dependencies
+### REST API
 
-- **langgraph** - Orchestration framework for multi-agent systems
-- **langchain-google-genai** - Google Gemini LLM integration
-- **langchain-community** - Community tools (Tavily search)
-- **tavily-python** - Advanced web search API
-- **markdown** - Markdown to HTML conversion
-- **xhtml2pdf** - PDF generation
-- **python-dotenv** - Environment variable management
+- `GET /api/status/{thread_id}` - Get workflow status
+- `GET /api/checkpoint/{thread_id}` - Get checkpoint data for review
+- `GET /api/download/{thread_id}` - Download generated PDF
+
+### WebSocket
+
+- `WS /ws/{thread_id}` - Real-time communication for all workflow operations
+
+**WebSocket Message Types:**
+
+1. **Start Workflow** (Client → Server):
+   ```json
+   {
+     "type": "start",
+     "transcript": "Advisor: Hi Simon..."
+   }
+   ```
+
+2. **Resume from Checkpoint** (Client → Server):
+   ```json
+   {
+     "type": "resume",
+     "approved_sources": [0, 1, 3],
+     "manual_notes": "Additional context..."
+   }
+   ```
+
+3. **Server → Client Messages**:
+   - `progress` - Step updates (extracting, planning, researching, writing, complete)
+   - `log` - Real-time terminal logs
+   - `checkpoint` - Checkpoint reached notification
+   - `complete` - Workflow completion notification
+   - `error` - Error messages
+
+**Note:** All workflow operations (start, resume, progress) are handled via WebSocket for real-time streaming. REST endpoints are used only for status checks and downloads.
+
+## 🔄 Workflow Flow
+
+```mermaid
+graph TD
+    A[Start] --> B[Extract Profile]
+    B --> C[Plan Research]
+    C --> D[Execute Research]
+    D --> E{Checkpoint}
+    E -->|Human Review| F[Approve/Reject Sources]
+    F -->|Approved| G[Write Report]
+    F -->|Rejected| H[Abort]
+    G --> I[Generate PDF]
+    I --> J[Complete]
+```
+
+## 🧪 Testing
+
+### Backend
+
+```bash
+cd backend
+pytest  # If tests are available
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run lint
+npm run build  # Test production build
+```
+
+## 🚀 Deployment
+
+### Docker (Recommended)
+
+```bash
+# Coming soon - docker-compose.yml included
+docker-compose up -d
+```
+
+### Manual Deployment
+
+**Backend:**
+- Use uvicorn with production settings
+- Set `CHECKPOINT_STORAGE=postgres` for persistence
+- Use environment variables for secrets
+
+**Frontend:**
+- Build: `npm run build`
+- Deploy to Vercel/Netlify
+- Set environment variables
+
+## 📝 Environment Variables
+
+**Location:** Create `.env` file in the **project root** (not in `backend/` folder)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GOOGLE_API_KEY` | Google Gemini API key | ✅ Yes |
+| `TAVILY_API_KEY` | Tavily search API key | ✅ Yes |
+| `FRONTEND_URL` | Frontend URL for CORS | No (default: localhost:3000) |
+| `PORT` | Backend port | No (default: 8000) |
+| `CHECKPOINT_STORAGE` | Storage type (memory/postgres) | No (default: memory) |
 
 ## 🔐 Security Notes
 
-- Never commit your `.env` file to version control
-- Keep API keys secure and rotate them regularly
-- The `.gitignore` file excludes sensitive files
+- Never commit `.env` or `.env.local` files
+- Keep API keys secure and rotate regularly
+- Use HTTPS in production
+- Implement rate limiting for API endpoints
+- Add authentication for production use
+
+## 🤝 Contributing
+
+This is a private repository. For issues or improvements, please contact the repository owner.
 
 ## 📄 License
 
@@ -256,23 +381,46 @@ This project is for educational and professional use. Ensure compliance with:
 - Tavily API Terms of Service
 - Relevant tax advisory regulations in your jurisdiction
 
-## 🤝 Contributing
+## 👤 Authors
 
-This is a private repository. For issues or improvements, please contact the repository owner.
-
-## 👤 Author
-
-**Abdullah Usmani**
-
-- GitHub: [@Abdullah-Usmani0](https://github.com/Abdullah-Usmani0)
+- **Abdullah Usmani** - [@Abdullah-Usmani0](https://github.com/Abdullah-Usmani0) - Original concept and backend architecture
+- **Muhammad Ihza** - [@zaza-ipynb](https://github.com/zaza-ipynb) - Original concept, backend architecture, professional frontend UI, WebSocket real-time updates, and human-in-the-loop checkpointing system
 
 ## 🙏 Acknowledgments
 
 - **Google Gemini** for powerful LLM capabilities
-- **LangGraph** for multi-agent orchestration
+- **LangGraph** for multi-agent orchestration with checkpointing
 - **Tavily** for advanced web search
+- **Next.js** & **FastAPI** for robust web frameworks
 - **Hoxton Tax Limited** for the use case and branding inspiration
 
 ## ⚠️ Disclaimer
 
 This system is a tool to assist tax professionals. All generated reports should be reviewed by qualified tax advisors before being provided to clients. The system does not constitute professional tax advice.
+
+## 📞 Support
+
+For issues or questions:
+1. Check the API documentation at `/docs`
+2. Review terminal logs for detailed error messages
+3. Ensure all environment variables are set correctly
+4. Check that backend and frontend are both running
+
+## 🗺️ Roadmap
+
+### Future Enhancements
+
+- [ ] **RAG Integration**: Internal knowledge base with vector database
+- [ ] **Multi-modal Input**: OCR for document uploads
+- [ ] **Advanced Checkpoint Features**: Query refinement, source scoring
+- [ ] **User Authentication**: Multi-user support with role-based access
+- [ ] **Report Templates**: Customizable PDF templates
+- [ ] **Audit Trail**: Complete history of human interventions
+- [ ] **PostgreSQL Integration**: Persistent checkpoint storage
+- [ ] **Docker Deployment**: One-command deployment
+- [ ] **API Rate Limiting**: Production-ready throttling
+- [ ] **Streaming Report Generation**: Progressive report updates
+
+---
+
+Built with ❤️ for professional tax consultancy
