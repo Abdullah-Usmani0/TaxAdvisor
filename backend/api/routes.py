@@ -125,14 +125,36 @@ async def get_checkpoint(thread_id: str):
     
     state = workflow_states.get(thread_id, {})
     
+    # Validate and ensure complete profile structure
+    profile = state.get("profile", {})
+    if not isinstance(profile, dict):
+        profile = {}
+    profile.setdefault("client_name", "Unknown")
+    profile.setdefault("assets", [])  # Always a list
+    profile.setdefault("tax_residency_current", "Unknown")
+    profile.setdefault("tax_residency_target", None)
+    profile.setdefault("marital_status", "Unknown")
+    profile.setdefault("specific_goals", [])
+    
+    # Validate and ensure complete research_plan structure
+    research_plan = state.get("research_plan", {})
+    if not isinstance(research_plan, dict):
+        research_plan = {}
+    research_plan.setdefault("queries", [])  # Always a list
+    research_plan.setdefault("rationale", "")
+    
     # Parse research sources
     research_context = state.get("research_context", "")
     sources = parse_research_sources(research_context)
     
+    # Ensure sources is always a list
+    if not isinstance(sources, list):
+        sources = []
+    
     return CheckpointData(
         thread_id=thread_id,
-        profile=state.get("profile", {}),
-        research_plan=state.get("research_plan", {}),
+        profile=profile,
+        research_plan=research_plan,
         sources=sources,
         timestamp=datetime.now()
     )
@@ -168,8 +190,20 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
         workflow = get_workflow()
         config = active_sessions[thread_id]["config"]
         
-        # Update state with approved sources and notes
+        # Get and validate state
+        if thread_id not in workflow_states:
+            raise HTTPException(status_code=404, detail="Workflow state not found")
+        
         current_state = workflow_states[thread_id]
+        if not isinstance(current_state, dict):
+            raise HTTPException(status_code=400, detail="Invalid workflow state")
+        
+        # Ensure required fields exist
+        current_state.setdefault("profile", {})
+        current_state.setdefault("research_plan", {})
+        current_state.setdefault("research_context", "")
+        
+        # Update state with approved sources and notes
         current_state["approved_sources"] = request.approved_sources
         current_state["manual_notes"] = request.manual_notes or ""
         
@@ -204,9 +238,12 @@ async def download_pdf(thread_id: str):
         raise HTTPException(status_code=404, detail="Report not found")
     
     state = workflow_states[thread_id]
+    if not isinstance(state, dict):
+        raise HTTPException(status_code=400, detail="Invalid workflow state")
+    
     report_md = state.get("final_report_md")
     
-    if not report_md:
+    if not report_md or not isinstance(report_md, str):
         raise HTTPException(status_code=400, detail="Report not yet generated")
     
     # Generate PDF

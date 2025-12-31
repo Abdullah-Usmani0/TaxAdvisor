@@ -234,8 +234,42 @@ async def run_workflow(thread_id: str, transcript: str):
                 try:
                     chunk = chunk_queue.get(timeout=0.1)
                     for node_name, node_output in chunk.items():
-                        final_state_ref["value"] = node_output
-                        # Progress updates are sent directly from nodes, no need to duplicate here
+                        # Accumulate state instead of replacing
+                        if final_state_ref["value"] is None:
+                            final_state_ref["value"] = initial_state.copy()
+                        final_state_ref["value"].update(node_output)  # Merge each node's output
+                        
+                        # Detect checkpoint immediately when researcher completes
+                        if node_name == "researcher":
+                            # Check if checkpoint reached (has research_context, no final_report)
+                            if "research_context" in node_output and node_output.get("research_context") and not node_output.get("final_report_md"):
+                                # Validate and ensure complete state structure before storing
+                                accumulated_state = final_state_ref["value"]
+                                
+                                # Ensure profile is complete dict with required fields
+                                if not isinstance(accumulated_state.get("profile"), dict):
+                                    accumulated_state["profile"] = {}
+                                profile = accumulated_state["profile"]
+                                profile.setdefault("client_name", "Unknown")
+                                profile.setdefault("assets", [])  # Always a list
+                                profile.setdefault("tax_residency_current", "Unknown")
+                                profile.setdefault("tax_residency_target", None)
+                                profile.setdefault("marital_status", "Unknown")
+                                profile.setdefault("specific_goals", [])
+                                
+                                # Ensure research_plan is complete dict with required fields
+                                if not isinstance(accumulated_state.get("research_plan"), dict):
+                                    accumulated_state["research_plan"] = {}
+                                research_plan = accumulated_state["research_plan"]
+                                research_plan.setdefault("queries", [])  # Always a list
+                                research_plan.setdefault("rationale", "")
+                                
+                                # Now store complete validated state
+                                workflow_states[thread_id] = accumulated_state
+                                active_sessions[thread_id]["status"] = "checkpoint_reached"
+                                await manager.send_checkpoint(thread_id)
+                                # Stream will pause here due to interrupt_before=["writer"]
+                                # Continue processing - stream naturally pauses
                 except queue.Empty:
                     pass
                 # Small sleep to prevent busy waiting
@@ -249,17 +283,25 @@ async def run_workflow(thread_id: str, transcript: str):
             if stream_error["value"]:
                 raise Exception(stream_error["value"])
         
-        # Store result
+        # Store result - validate state structure
         final_state = final_state_ref["value"] or initial_state
+        
+        # Ensure state is a dict
+        if not isinstance(final_state, dict):
+            final_state = initial_state.copy()
+        
+        # Ensure required fields exist
+        final_state.setdefault("profile", {})
+        final_state.setdefault("research_plan", {})
+        final_state.setdefault("research_context", "")
+        final_state.setdefault("final_report_md", "")
+        final_state.setdefault("approved_sources", [])
+        final_state.setdefault("manual_notes", "")
+        
         workflow_states[thread_id] = final_state
         
-        # Check if checkpoint reached
-        if "research_context" in final_state and final_state["research_context"] and not final_state.get("final_report_md"):
-            await manager.send_progress(thread_id, "researching", 75)
-            await manager.send_log(thread_id, "Research complete. Awaiting review...", "success")
-            active_sessions[thread_id]["status"] = "checkpoint_reached"
-            await manager.send_checkpoint(thread_id)
-        elif "final_report_md" in final_state and final_state["final_report_md"]:
+        # Check if workflow completed (checkpoint detection happens immediately in chunk processing)
+        if "final_report_md" in final_state and final_state["final_report_md"]:
             await manager.send_progress(thread_id, "complete", 100)
             await manager.send_log(thread_id, "Report generation complete!", "success")
             active_sessions[thread_id]["status"] = "completed"

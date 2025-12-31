@@ -1,5 +1,5 @@
 """Pydantic models for API requests, responses, and data validation"""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Literal
 from datetime import datetime
 
@@ -34,11 +34,13 @@ class AnalyzeResponse(BaseModel):
 
 class StatusResponse(BaseModel):
     """Current workflow status"""
-    thread_id: str
-    current_step: Literal["extracting", "planning", "researching", "checkpoint", "writing", "complete", "error"]
-    progress_percentage: int = Field(ge=0, le=100)
-    is_paused: bool
+    thread_id: str = Field(alias="threadId")
+    current_step: Literal["extracting", "planning", "researching", "checkpoint", "writing", "complete", "error"] = Field(alias="currentStep")
+    progress_percentage: int = Field(ge=0, le=100, alias="progressPercentage")
+    is_paused: bool = Field(alias="isPaused")
     error: Optional[str] = None
+    
+    model_config = ConfigDict(populate_by_name=True)  # Allow both snake_case and camelCase
 
 
 class ResearchSource(BaseModel):
@@ -47,16 +49,20 @@ class ResearchSource(BaseModel):
     url: str
     title: str
     snippet: str
-    relevance_score: Optional[float] = None
+    relevance_score: Optional[float] = Field(default=None, alias="relevanceScore")
+    
+    model_config = ConfigDict(populate_by_name=True)  # Allow both snake_case and camelCase
 
 
 class CheckpointData(BaseModel):
     """Data available at checkpoint for human review"""
-    thread_id: str
+    thread_id: str = Field(alias="threadId")
     profile: dict  # ClientProfile data
-    research_plan: dict
+    research_plan: dict = Field(alias="researchPlan")
     sources: List[ResearchSource]
     timestamp: datetime
+    
+    model_config = ConfigDict(populate_by_name=True)  # Allow both snake_case and camelCase
 
 
 # WebSocket Message Models

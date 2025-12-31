@@ -64,15 +64,11 @@ class TaxConsultancyAgents:
                     return
                 
                 # Send log immediately using thread-safe coroutine runner
-                future = asyncio.run_coroutine_threadsafe(
+                # Fire and forget - don't wait for result
+                asyncio.run_coroutine_threadsafe(
                     self.ws_manager.send_log(thread_id, message, log_type),
                     loop
                 )
-                # Check if it completes (with timeout to avoid blocking)
-                try:
-                    future.result(timeout=0.1)
-                except Exception as e:
-                    print(f"DEBUG: Log send may have failed: {e}")
             except Exception as e:
                 print(f"ERROR sending log: {e}")
                 import traceback
