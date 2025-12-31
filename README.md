@@ -87,6 +87,12 @@ TaxAdvisor/
 - Google Gemini API Key
 - Tavily API Key (for web research)
 
+**macOS System Dependencies:**
+```bash
+# Required for pycairo (PDF generation)
+brew install pkg-config cairo
+```
+
 ### 1. Clone the Repository
 
 ```bash
@@ -106,11 +112,18 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Create .env file
-cp .env.example .env
-# Edit .env and add your API keys:
-# GOOGLE_API_KEY=your_gemini_api_key
-# TAVILY_API_KEY=your_tavily_api_key
+# Create .env file in project root
+cd ..  # Go back to project root
+cat > .env << EOF
+GOOGLE_API_KEY=your_gemini_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+FRONTEND_URL=http://localhost:3000
+PORT=8000
+CHECKPOINT_STORAGE=memory
+EOF
+
+# Edit .env and add your actual API keys
+cd backend  # Return to backend directory
 ```
 
 ### 3. Frontend Setup
@@ -121,9 +134,8 @@ cd ../frontend
 # Install dependencies
 npm install
 
-# Create .env.local file
-cp .env.local.example .env.local
-# Default values should work for local development
+# Optional: Create .env.local file if you need custom API URL
+# Default values work for local development (http://localhost:8000)
 ```
 
 ### 4. Run the Application
@@ -131,6 +143,7 @@ cp .env.local.example .env.local
 **Terminal 1 - Backend:**
 ```bash
 cd backend
+source venv/bin/activate  # Activate virtual environment (Windows: venv\Scripts\activate)
 uvicorn main:app --reload --port 8000
 ```
 
@@ -182,10 +195,19 @@ You can:
 - ➕ **Add manual research notes**
 - 🚫 **Abort** the analysis
 
-### 4. Download Report
+### 4. Generate & Download Report
 
-Once approved, the AI generates a comprehensive PDF report including:
+Once approved, the AI generates a comprehensive PDF report. The workflow continues automatically:
 
+- ✅ **Write Report**: AI generates report using approved sources and your manual notes
+- 📊 **Real-time Progress**: Watch step 4 logs stream in real-time (same as steps 1-3)
+- 📄 **Completion**: When complete, the page automatically scrolls down to show:
+  - "Analysis Complete" section
+  - Full report preview
+  - PDF download button
+  - "Start New Analysis" button
+
+**Report includes:**
 - Executive Summary
 - Client Situation
 - UK Statutory Residence Test Analysis
@@ -193,11 +215,13 @@ Once approved, the AI generates a comprehensive PDF report including:
 - Recommendations
 - Disclaimer
 
+**Note:** The processing UI (progress tracker and logs) remains visible above the completion section, so you can see the full journey on one page.
+
 ## 🔧 Configuration
 
 ### Backend Configuration
 
-Edit `backend/.env`:
+Edit `.env` in the project root:
 
 ```bash
 GOOGLE_API_KEY=your_api_key_here
@@ -236,15 +260,41 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8000
 
 ### REST API
 
-- `POST /api/analyze` - Start workflow
 - `GET /api/status/{thread_id}` - Get workflow status
-- `GET /api/checkpoint/{thread_id}` - Get checkpoint data
-- `POST /api/checkpoint/approve` - Resume workflow
-- `GET /api/download/{thread_id}` - Download PDF
+- `GET /api/checkpoint/{thread_id}` - Get checkpoint data for review
+- `GET /api/download/{thread_id}` - Download generated PDF
 
 ### WebSocket
 
-- `WS /ws/{thread_id}` - Real-time progress updates
+- `WS /ws/{thread_id}` - Real-time communication for all workflow operations
+
+**WebSocket Message Types:**
+
+1. **Start Workflow** (Client → Server):
+   ```json
+   {
+     "type": "start",
+     "transcript": "Advisor: Hi Simon..."
+   }
+   ```
+
+2. **Resume from Checkpoint** (Client → Server):
+   ```json
+   {
+     "type": "resume",
+     "approved_sources": [0, 1, 3],
+     "manual_notes": "Additional context..."
+   }
+   ```
+
+3. **Server → Client Messages**:
+   - `progress` - Step updates (extracting, planning, researching, writing, complete)
+   - `log` - Real-time terminal logs
+   - `checkpoint` - Checkpoint reached notification
+   - `complete` - Workflow completion notification
+   - `error` - Error messages
+
+**Note:** All workflow operations (start, resume, progress) are handled via WebSocket for real-time streaming. REST endpoints are used only for status checks and downloads.
 
 ## 🔄 Workflow Flow
 
@@ -301,6 +351,8 @@ docker-compose up -d
 
 ## 📝 Environment Variables
 
+**Location:** Create `.env` file in the **project root** (not in `backend/` folder)
+
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `GOOGLE_API_KEY` | Google Gemini API key | ✅ Yes |
@@ -331,11 +383,8 @@ This project is for educational and professional use. Ensure compliance with:
 
 ## 👤 Authors
 
-**Original Concept:**
-- Abdullah Usmani - [@Abdullah-Usmani0](https://github.com/Abdullah-Usmani0)
-
-**UI & Human-in-Loop Implementation:**
-- Enhanced with professional frontend and checkpointing system
+- **Abdullah Usmani** - [@Abdullah-Usmani0](https://github.com/Abdullah-Usmani0) - Original concept and backend architecture
+- **Muhammad Ihza** - [@zaza-ipynb](https://github.com/zaza-ipynb) - Original concept, backend architecture, professional frontend UI, WebSocket real-time updates, and human-in-the-loop checkpointing system
 
 ## 🙏 Acknowledgments
 
