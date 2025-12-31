@@ -187,7 +187,22 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
     
     # Action: approve - continue workflow
     try:
-        workflow = get_workflow()
+        # Import manager to ensure event loop is set for log streaming
+        from backend.api.websocket import manager
+        import asyncio
+        
+        # Ensure event loop is set for log streaming from nodes
+        try:
+            loop = asyncio.get_running_loop()
+            manager.set_event_loop(loop)
+        except RuntimeError:
+            # No event loop running, logs won't stream but workflow will still run
+            pass
+        
+        # Get workflow with websocket_manager to ensure logs stream properly
+        # Use the same workflow instance that was used initially (via get_workflow)
+        # This ensures we use the same checkpointer and can resume from checkpoint
+        workflow = get_workflow(websocket_manager=manager)
         config = active_sessions[thread_id]["config"]
         
         # Get and validate state
@@ -198,17 +213,34 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
         if not isinstance(current_state, dict):
             raise HTTPException(status_code=400, detail="Invalid workflow state")
         
-        # Ensure required fields exist
-        current_state.setdefault("profile", {})
-        current_state.setdefault("research_plan", {})
-        current_state.setdefault("research_context", "")
-        
-        # Update state with approved sources and notes
-        current_state["approved_sources"] = request.approved_sources
-        current_state["manual_notes"] = request.manual_notes or ""
-        
-        # Resume workflow from checkpoint (use invoke since nodes are sync)
-        result = workflow.invoke(current_state, config)
+        # Update checkpoint state with new fields, then invoke with None to resume
+        # LangGraph requires invoke(None, config) to load from checkpoint, not full state
+        try:
+            # Option 1: Use update_state() if available (preferred)
+            workflow.update_state(
+                config,
+                {
+                    "approved_sources": request.approved_sources,
+                    "manual_notes": request.manual_notes or ""
+                }
+            )
+            # Resume by invoking with None - LangGraph loads checkpoint and continues from writer
+            result = workflow.invoke(None, config)
+        except AttributeError:
+            # Option 2: Access checkpointer directly if update_state() not available
+            checkpointer = workflow.checkpointer
+            
+            # Get current checkpoint and update it
+            checkpoint = checkpointer.get(config)
+            if checkpoint:
+                current_state = checkpoint.get("channel_values", {})
+                current_state["approved_sources"] = request.approved_sources
+                current_state["manual_notes"] = request.manual_notes or ""
+                # Update checkpoint
+                checkpointer.put(config, current_state)
+            
+            # Resume by invoking with None
+            result = workflow.invoke(None, config)
         
         # Update stored state
         workflow_states[thread_id] = result

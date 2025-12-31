@@ -219,8 +219,10 @@ class TaxConsultancyAgents:
         approved_sources = state.get("approved_sources", [])
         manual_notes = state.get("manual_notes", "")
         
-        # Log approved sources
+        # Filter research context by approved sources
         if approved_sources:
+            from backend.agents.checkpoints import filter_research_by_approved_sources
+            context = filter_research_by_approved_sources(context, approved_sources)
             self._send_log_sync(thread_id, f"📋 Using {len(approved_sources)} approved source(s): {approved_sources}", "info")
         else:
             self._send_log_sync(thread_id, "📋 No sources selected - using all research context", "info")

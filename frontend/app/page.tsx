@@ -102,6 +102,10 @@ export default function Home() {
     if (!threadId) return;
 
     setIsLoading(true);
+    setAppState('processing');
+    setCurrentStep('writing');
+    setProgressPercentage(90);
+    
     try {
       await approveCheckpoint({
         thread_id: threadId,
@@ -109,9 +113,7 @@ export default function Home() {
         manual_notes: notes,
         action: 'approve',
       });
-      setAppState('processing');
-      setCurrentStep('writing');
-      setProgressPercentage(90);
+      // Note: Progress will be updated via WebSocket messages from writer node
     } catch (error) {
       console.error("Failed to approve checkpoint:", error);
       alert("Failed to approve checkpoint. Please try again.");

@@ -17,12 +17,17 @@ class TaxState(TypedDict):
     thread_id: str
 
 
-def build_workflow(websocket_manager=None):
+# Global shared checkpointer - ensures checkpoint state persists across workflow instances
+_shared_checkpointer = MemorySaver()
+
+
+def build_workflow(websocket_manager=None, checkpointer=None):
     """
     Build LangGraph workflow with checkpointing enabled
     
     Args:
         websocket_manager: Optional WebSocket manager for real-time updates
+        checkpointer: Optional checkpointer instance (defaults to shared global)
     
     Returns:
         Compiled LangGraph app with checkpointing
@@ -46,8 +51,8 @@ def build_workflow(websocket_manager=None):
     workflow.add_edge("researcher", "writer")  # Will interrupt before writer
     workflow.add_edge("writer", END)
     
-    # Compile with checkpointer and interrupt
-    memory = MemorySaver()
+    # Use shared checkpointer to ensure checkpoint state persists
+    memory = checkpointer if checkpointer is not None else _shared_checkpointer
     app = workflow.compile(
         checkpointer=memory,
         interrupt_before=["writer"]  # Pause before writing report for human review
