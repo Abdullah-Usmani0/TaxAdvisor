@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Building2 } from "lucide-react";
 import TranscriptInput from "@/components/TranscriptInput";
 import TerminalLogs from "@/components/TerminalLogs";
@@ -25,6 +25,20 @@ export default function Home() {
   const [progressPercentage, setProgressPercentage] = useState(0);
   const [checkpointData, setCheckpointData] = useState<CheckpointData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const completionRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to completion section when workflow completes
+  useEffect(() => {
+    if (appState === 'complete' && completionRef.current) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        completionRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        });
+      }, 100);
+    }
+  }, [appState]);
 
   // WebSocket connection
   const { sendMessage, waitForConnection } = useWebSocket(threadId, {
@@ -164,8 +178,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* Processing State */}
-        {(appState === 'processing' || appState === 'checkpoint') && (
+        {/* Processing State - Keep visible even when complete */}
+        {(appState === 'processing' || appState === 'checkpoint' || appState === 'complete') && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column - Progress */}
             <div className="lg:col-span-1 space-y-6">
@@ -200,9 +214,13 @@ export default function Home() {
           </div>
         )}
 
-        {/* Complete State */}
+        {/* Complete State - Appears below processing UI */}
         {appState === 'complete' && threadId && (
-          <div className="space-y-12">
+          <div 
+            id="completion-section" 
+            ref={completionRef}
+            className="mt-12 space-y-12"
+          >
             <div className="text-center space-y-4">
               <h2 className="text-5xl font-bold text-white tracking-tight">
                 Analysis Complete
