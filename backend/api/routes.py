@@ -242,6 +242,11 @@ async def approve_checkpoint(request: CheckpointApprovalRequest):
             # Resume by invoking with None
             result = workflow.invoke(None, config)
         
+        # Send completion messages via WebSocket so frontend updates
+        await manager.send_progress(thread_id, "complete", 100)
+        await manager.send_log(thread_id, "Report generation complete!", "success")
+        await manager.send_complete(thread_id)
+        
         # Update stored state
         workflow_states[thread_id] = result
         active_sessions[thread_id]["status"] = "completed"
