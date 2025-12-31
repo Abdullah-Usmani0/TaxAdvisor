@@ -45,8 +45,10 @@ export default function Home() {
           const data = await getCheckpoint(threadId);
           setCheckpointData(data);
           setAppState('checkpoint');
+          setIsLoading(false);  // Reset loading so user can interact with checkpoint
         } catch (error) {
           console.error("Failed to fetch checkpoint:", error);
+          setIsLoading(false);  // Also reset on error
         }
       }
     },

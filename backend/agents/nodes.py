@@ -219,9 +219,15 @@ class TaxConsultancyAgents:
         approved_sources = state.get("approved_sources", [])
         manual_notes = state.get("manual_notes", "")
         
-        # If approved sources specified, filter research context
-        if approved_sources and context:
-            # Simple filtering - in production, would parse and filter by index
+        # Log approved sources
+        if approved_sources:
+            self._send_log_sync(thread_id, f"📋 Using {len(approved_sources)} approved source(s): {approved_sources}", "info")
+        else:
+            self._send_log_sync(thread_id, "📋 No sources selected - using all research context", "info")
+        
+        # If manual notes provided, add to context
+        if manual_notes and manual_notes.strip():
+            self._send_log_sync(thread_id, f"📝 Including manual notes: {manual_notes[:100]}...", "info")
             context = f"{context}\n\nHUMAN REVIEWER NOTES:\n{manual_notes}"
         
         self._send_log_sync(thread_id, "✍️  [STEP 4/4] WRITING COMPREHENSIVE TAX REPORT", "info")
